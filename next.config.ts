@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   // Native / WASM / ESM-only packages that must be loaded by Node itself, not bundled.
-  serverExternalPackages: ["better-sqlite3", "quickjs-emscripten", "@openrouter/agent", "@openrouter/mcp", "@openrouter/sdk"],
+  serverExternalPackages: ["better-sqlite3", "quickjs-emscripten", "@openrouter/agent", "@openrouter/sdk"],
   turbopack: {
     rules: {
       "*.css": {

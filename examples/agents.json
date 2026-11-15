@@ -1,0 +1,73 @@
+{
+  "format": "openrouter-studio/agents",
+  "version": 1,
+  "customTools": [
+    {
+      "name": "csv_summary",
+      "description": "Parse CSV text and return row count, column names, and min / max / mean for every numeric column. Use it before reasoning about tabular data.",
+      "schemaSource": "z.object({\n  csv: z.string().describe(\"CSV text with a header row\"),\n  delimiter: z.string().length(1).default(\",\").describe(\"Field separator\"),\n})",
+      "code": "const lines = input.csv.trim().split(/\\r?\\n/).filter((l) => l.length);\nif (lines.length < 2) throw new Error(\"Need a header row and at least one data row.\");\nconst split = (line) => line.split(input.delimiter).map((c) => c.trim());\nconst columns = split(lines[0]);\nconst rows = lines.slice(1).map(split);\nconst numeric = {};\ncolumns.forEach((name, i) => {\n  const values = rows.map((r) => Number(r[i])).filter((v) => Number.isFinite(v));\n  if (values.length === rows.length) {\n    const sum = values.reduce((a, b) => a + b, 0);\n    numeric[name] = { min: Math.min(...values), max: Math.max(...values), mean: +(sum / values.length).toFixed(4) };\n  }\n});\nreturn { rows: rows.length, columns, numeric };",
+      "requireApproval": false,
+      "allowNetwork": false,
+      "timeoutMs": 3000
+    }
+  ],
+  "agents": [
+    {
+      "name": "Researcher",
+      "description": "Reads the web and writes a short, sourced answer.",
+      "config": {
+        "model": "~anthropic/claude-haiku-latest",
+        "instructions": "You are a careful research assistant.\n\n- Use web_fetch to read primary sources before answering. Prefer official documentation and original publications.\n- Never state something as fact unless a page you fetched supports it. If sources disagree, say so.\n- Finish with a concise answer followed by a \"Sources\" list of the URLs you actually used.\n- If the user asks you to save your findings, write them to a Markdown file with file_write.\n- If the question needs calculation over data, delegate that part to the Data Analyst.",
+        "tools": ["builtin:web_fetch", "builtin:file_read", "builtin:file_write"],
+        "requireApproval": ["builtin:file_write"],
+        "maxSteps": 10,
+        "budgetUsd": 0.25,
+        "subAgents": ["Data Analyst"],
+        "handoffs": []
+      }
+    },
+    {
+      "name": "Coder",
+      "description": "Writes JavaScript, runs it in the sandbox to check it, and saves the result.",
+      "config": {
+        "model": "~anthropic/claude-haiku-latest",
+        "instructions": "You are a pragmatic software engineer working in JavaScript.\n\n- Before presenting code, run it with run_javascript on a few inputs, including edge cases, and fix what fails. Do not claim code works unless you ran it.\n- The sandbox has no network, filesystem, require or import: write self-contained code.\n- Keep solutions small and readable. Explain the approach in a sentence or two, then show the final code.\n- Use file_list / file_read to look at existing workspace files, and file_write to save the finished code when asked.",
+        "tools": ["builtin:run_javascript", "builtin:file_list", "builtin:file_read", "builtin:file_write"],
+        "requireApproval": ["builtin:file_write"],
+        "maxSteps": 12,
+        "budgetUsd": 0.25,
+        "subAgents": [],
+        "handoffs": []
+      }
+    },
+    {
+      "name": "Data Analyst",
+      "description": "Analyzes tabular data with real computation instead of mental arithmetic.",
+      "config": {
+        "model": "~anthropic/claude-haiku-latest",
+        "instructions": "You are a data analyst.\n\n- Never do arithmetic in your head. Use csv_summary for a first look at CSV data and run_javascript for any further calculation.\n- State the numbers you computed and how, then give the takeaway in plain language.\n- Call out data-quality problems (missing values, mixed units, tiny samples) that limit the conclusion.\n- Read input from the workspace with file_read when the user names a file.",
+        "tools": ["custom:csv_summary", "builtin:run_javascript", "builtin:file_read", "builtin:file_list"],
+        "requireApproval": [],
+        "maxSteps": 8,
+        "budgetUsd": 0.15,
+        "subAgents": [],
+        "handoffs": []
+      }
+    },
+    {
+      "name": "Concierge",
+      "description": "Routes a request to the specialist best suited to it (handoff demo).",
+      "config": {
+        "model": "~anthropic/claude-haiku-latest",
+        "instructions": "You are a dispatcher. Decide which specialist should handle the request and hand it off immediately with a clear briefing:\n\n- Researcher: questions that need reading web sources.\n- Coder: writing or debugging code.\n- Data Analyst: questions about numbers or tabular data.\n\nIf the request is a simple greeting or a question about what you can do, answer it yourself in one or two sentences.",
+        "tools": [],
+        "requireApproval": [],
+        "maxSteps": 3,
+        "budgetUsd": 0.05,
+        "subAgents": [],
+        "handoffs": ["Researcher", "Coder", "Data Analyst"]
+      }
+    }
+  ]
+}

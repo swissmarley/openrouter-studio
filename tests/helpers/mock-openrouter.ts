@@ -10,7 +10,7 @@ export interface Recorded {
 
 type Reply =
   | { status: number; json: unknown; headers?: Record<string, string> }
-  | { status?: number; sse: string[]; headers?: Record<string, string> }
+  | { status?: number; sse: string[]; headers?: Record<string, string>; delayMs?: number }
   | ((req: Recorded) => Reply);
 
 /**
@@ -68,11 +68,14 @@ export class MockOpenRouter {
       res.end(JSON.stringify({ error: { code: 404, message: `mock: no reply queued for ${path}` } }));
       return;
     }
-    let reply = queue.length > 1 ? queue.shift()! : queue[0];
-    if (typeof reply === "function") reply = reply(recorded);
+    const next = queue.length > 1 ? queue.shift()! : queue[0];
+    const reply = typeof next === "function" ? next(recorded) : next;
     if (typeof reply === "function") throw new Error("nested reply functions are not supported");
 
     if ("sse" in reply) {
+      // An optional pause before the first byte, to give tests time to pause or cancel.
+      if (reply.delayMs) await new Promise((r) => setTimeout(r, reply.delayMs));
+      if (res.destroyed) return;
       res.writeHead(reply.status ?? 200, { "content-type": "text/event-stream", ...reply.headers });
       for (const frame of reply.sse) {
         res.write(frame);

@@ -112,42 +112,51 @@ export interface RetryResult {
 }
 
 /**
- * fetch() with retries on 408/429/5xx and network errors. Honors Retry-After, otherwise
- * backs off exponentially with jitter. Only the request is retried: once a response body
- * starts streaming it is handed to the caller as-is.
+ * Runs a request with retries on 408/429/5xx and network errors. Honors Retry-After,
+ * otherwise backs off exponentially with jitter. Only the request is retried: once a
+ * response body starts streaming it is handed to the caller as-is. `attempt` must issue
+ * a fresh request each time it is called.
  */
-export async function fetchWithRetry(
-  url: string,
-  init: RequestInit,
+export async function retrying(
+  attempt: () => Promise<Response>,
+  signal?: AbortSignal | null,
   opts: { maxRetries?: number; onRetry?: (attempt: number, reason: string, delayMs: number) => void } = {},
 ): Promise<RetryResult> {
   const maxRetries = opts.maxRetries ?? env.maxRetries;
-  let attempt = 0;
+  let tries = 0;
   for (;;) {
     let response: Response | null = null;
     let networkError: unknown = null;
     try {
-      response = await fetch(url, init);
+      response = await attempt();
     } catch (err) {
-      if (init.signal?.aborted) throw err;
+      if (signal?.aborted) throw err;
       networkError = err;
     }
 
-    if (response && !isRetryableStatus(response.status)) return { response, retries: attempt };
-    if (attempt >= maxRetries) {
-      if (response) return { response, retries: attempt };
+    if (response && !isRetryableStatus(response.status)) return { response, retries: tries };
+    if (tries >= maxRetries) {
+      if (response) return { response, retries: tries };
       throw networkError;
     }
 
     const retryAfter = response ? parseRetryAfter(response.headers.get("retry-after")) : null;
-    const delay = backoffDelay(attempt, retryAfter);
+    const delay = backoffDelay(tries, retryAfter);
     const reason = response ? `HTTP ${response.status}` : `network error: ${(networkError as Error)?.message ?? networkError}`;
     // Drain the failed body so the connection can be reused.
     await response?.body?.cancel().catch(() => {});
-    opts.onRetry?.(attempt + 1, reason, delay);
-    await sleep(delay, init.signal);
-    attempt++;
+    opts.onRetry?.(tries + 1, reason, delay);
+    await sleep(delay, signal);
+    tries++;
   }
+}
+
+export function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  opts: { maxRetries?: number; onRetry?: (attempt: number, reason: string, delayMs: number) => void } = {},
+): Promise<RetryResult> {
+  return retrying(() => fetch(url, init), init.signal, opts);
 }
 
 export class UpstreamError extends ApiError {
