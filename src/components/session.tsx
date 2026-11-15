@@ -39,14 +39,14 @@ const Ctx = createContext<SessionContext | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SessionState>({ loading: true, connected: false });
 
-  const refresh = useCallback(async () => {
-    try {
-      const next = await api.get<Omit<SessionState, "loading">>("/api/auth/status");
-      setState({ loading: false, ...next });
-    } catch {
-      setState({ loading: false, connected: false });
-    }
-  }, []);
+  const refresh = useCallback(
+    () =>
+      api.get<Omit<SessionState, "loading">>("/api/auth/status").then(
+        (next) => setState({ loading: false, ...next }),
+        () => setState({ loading: false, connected: false }),
+      ),
+    [],
+  );
 
   const disconnect = useCallback(
     async (forget: boolean) => {
@@ -74,18 +74,16 @@ export function ConnectKey({ compact }: { compact?: boolean }) {
   const { refresh } = useSession();
   const [apiKey, setApiKey] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // The OAuth callback reports failures through the query string. This form only ever
+  // mounts in the browser (after the session check), so reading the URL here is safe.
+  const [error, setError] = useState<string | null>(() => new URLSearchParams(window.location.search).get("auth_error"));
 
   useEffect(() => {
-    // The OAuth callback reports failures through the query string.
     const params = new URLSearchParams(window.location.search);
-    const authError = params.get("auth_error");
-    if (authError) {
-      setError(authError);
-      params.delete("auth_error");
-      const qs = params.toString();
-      window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
-    }
+    if (!params.has("auth_error")) return;
+    params.delete("auth_error");
+    const qs = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
   }, []);
 
   async function submit(e: FormEvent) {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { useResource } from "@/lib/client/api";
 import { cx, usd } from "@/lib/shared/format";
@@ -29,15 +29,16 @@ interface BudgetStatus {
 export function BudgetAlerts() {
   const { connected } = useSession();
   const { data } = useResource<BudgetStatus>(connected ? "/api/budget" : null, { pollMs: 30_000 });
-  const [dismissed, setDismissed] = useState<string[]>([]);
-
-  useEffect(() => {
+  // Nothing renders until budget data arrives (client-side), so reading storage in the
+  // initializer cannot cause a hydration mismatch.
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
     try {
-      setDismissed(JSON.parse(sessionStorage.getItem("ors-dismissed-alerts") ?? "[]"));
+      return JSON.parse(sessionStorage.getItem("ors-dismissed-alerts") ?? "[]");
     } catch {
-      /* ignore unreadable storage */
+      return [];
     }
-  }, []);
+  });
 
   const active = (data?.windows ?? []).filter((w) => w.crossed !== null);
   const visible = active.filter((w) => !dismissed.includes(`${w.period}:${w.crossed}`) || (w.exceeded && data?.hardStop));

@@ -51,39 +51,42 @@ export interface Resource<T> {
 
 /** Fetch-on-mount with reload. Pass `null` to skip (e.g. while a dependency is unknown). */
 export function useResource<T>(url: string | null, opts: { pollMs?: number } = {}): Resource<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<ApiClientError | null>(null);
-  const [loading, setLoading] = useState(url !== null);
+  // The result is stored with the URL it answers, so "loading" is simply "no answer for
+  // the current URL yet" and never has to be toggled by hand.
+  const [result, setResult] = useState<{ url: string; data: T | null; error: ApiClientError | null } | null>(null);
   const latest = useRef(0);
 
-  const load = useCallback(async () => {
-    if (url === null) return;
+  const load = useCallback((): Promise<void> => {
+    if (url === null) return Promise.resolve();
     const ticket = ++latest.current;
-    try {
-      const next = await api.get<T>(url);
-      // Ignore responses that were overtaken by a newer request.
-      if (ticket !== latest.current) return;
-      setData(next);
-      setError(null);
-    } catch (err) {
-      if (ticket !== latest.current) return;
-      setError(err instanceof ApiClientError ? err : new ApiClientError(0, "network", (err as Error).message));
-    } finally {
-      if (ticket === latest.current) setLoading(false);
-    }
+    return api.get<T>(url).then(
+      (data) => {
+        // Ignore responses that were overtaken by a newer request.
+        if (ticket === latest.current) setResult({ url, data, error: null });
+      },
+      (err: unknown) => {
+        if (ticket !== latest.current) return;
+        const error = err instanceof ApiClientError ? err : new ApiClientError(0, "network", (err as Error).message);
+        // Keep showing the last good data if a background refresh fails.
+        setResult((prev) => ({ url, data: prev?.url === url ? prev.data : null, error }));
+      },
+    );
   }, [url]);
 
   useEffect(() => {
-    if (url === null) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
+    if (url === null) return;
     void load();
     if (!opts.pollMs) return;
     const timer = setInterval(() => void load(), opts.pollMs);
     return () => clearInterval(timer);
   }, [url, load, opts.pollMs]);
 
-  return { data, error, loading, reload: load, setData };
+  const current = result && result.url === url ? result : null;
+  const setData = useCallback(
+    (next: T | null) => {
+      if (url !== null) setResult({ url, data: next, error: null });
+    },
+    [url],
+  );
+  return { data: current?.data ?? null, error: current?.error ?? null, loading: url !== null && current === null, reload: load, setData };
 }

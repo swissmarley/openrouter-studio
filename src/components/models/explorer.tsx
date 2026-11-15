@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Check, Copy, GitCompareArrows, MessageSquare, RefreshCw, X } from "lucide-react";
 import { useResource } from "@/lib/client/api";
 import { useModels } from "@/lib/client/models";
@@ -274,15 +274,19 @@ function CompareDialog({ models, open, onClose }: { models: ModelInfo[]; open: b
 
 export function ModelExplorer() {
   const { models, loading, error, refresh } = useModels();
-  const [filters, setFilters] = useState<ModelFilters>(emptyFilters);
+  const [filters, setFiltersRaw] = useState<ModelFilters>(emptyFilters);
   const [limit, setLimit] = useState(PAGE);
+  // Any filter change starts the list again from the first page.
+  const setFilters = (next: ModelFilters | ((f: ModelFilters) => ModelFilters)) => {
+    setFiltersRaw(next);
+    setLimit(PAGE);
+  };
   const [selected, setSelected] = useState<string[]>([]);
   const [detail, setDetail] = useState<ModelInfo | null>(null);
   const [comparing, setComparing] = useState(false);
   const tbody = useRef<HTMLTableSectionElement>(null);
 
   const set = <K extends keyof ModelFilters>(key: K, value: ModelFilters[K]) => setFilters((f) => ({ ...f, [key]: value }));
-  useEffect(() => setLimit(PAGE), [filters]);
 
   const authors = useMemo(() => [...new Set(models.map((m) => m.author))].sort(), [models]);
   const filtered = useMemo(() => filterModels(models, filters), [models, filters]);

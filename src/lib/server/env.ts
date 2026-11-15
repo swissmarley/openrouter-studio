@@ -17,7 +17,10 @@ export const env = {
   appSecret: process.env.APP_SECRET || "",
   /** Public origin of this app, used for attribution headers and the OAuth callback. */
   appUrl: (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, ""),
-  openrouterBaseUrl: (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, ""),
+  /** Read lazily so tests can point the app at a mock upstream. */
+  get openrouterBaseUrl() {
+    return (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
+  },
   openrouterAuthUrl: (process.env.OPENROUTER_AUTH_URL || "https://openrouter.ai/auth").replace(/\/$/, ""),
   maxRetries: int(process.env.OPENROUTER_MAX_RETRIES, 3),
   /** Let model-driven tools (web_fetch, http_request, sandbox fetch) reach private/loopback addresses. */

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   Activity,
   Bot,
@@ -51,22 +51,30 @@ function isTyping(target: EventTarget | null): boolean {
   return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
 }
 
+type Theme = "light" | "dark";
+
+// The theme lives on <html data-theme> (set before paint by the inline script in the
+// layout), so React reads it as an external store instead of mirroring it in state.
+const themeListeners = new Set<() => void>();
+const readTheme = (): Theme => (document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+const subscribeTheme = (fn: () => void) => {
+  themeListeners.add(fn);
+  return () => {
+    themeListeners.delete(fn);
+  };
+};
+
 function useTheme() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  useEffect(() => {
-    setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
-  }, []);
+  const theme = useSyncExternalStore<Theme>(subscribeTheme, readTheme, () => "light");
   const toggle = useCallback(() => {
-    setTheme((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      document.documentElement.dataset.theme = next;
-      try {
-        localStorage.setItem("ors-theme", next);
-      } catch {
-        /* storage unavailable: the choice just won't persist */
-      }
-      return next;
-    });
+    const next: Theme = readTheme() === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem("ors-theme", next);
+    } catch {
+      /* storage unavailable: the choice just won't persist */
+    }
+    themeListeners.forEach((fn) => fn());
   }, []);
   return { theme, toggle };
 }
@@ -94,19 +102,22 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
     const el = dialogRef.current;
     if (!el) return;
     if (open && !el.open) {
-      setQuery("");
-      setIndex(0);
       el.showModal();
       inputRef.current?.focus();
     }
     if (!open && el.open) el.close();
   }, [open]);
 
-  useEffect(() => setIndex(0), [query]);
+  // Reset for next time as the palette closes, not when it reopens.
+  function close() {
+    setQuery("");
+    setIndex(0);
+    onClose();
+  }
 
   function run(cmd: Command | undefined) {
     if (!cmd) return;
-    onClose();
+    close();
     cmd.run();
   }
 
@@ -114,8 +125,8 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
     <dialog
       ref={dialogRef}
       aria-label="Command palette"
-      onClose={onClose}
-      onClick={(e) => e.target === dialogRef.current && onClose()}
+      onClose={close}
+      onClick={(e) => e.target === dialogRef.current && close()}
       className="mx-auto mt-[14vh] mb-auto w-[calc(100vw-2rem)] max-w-lg rounded-xl border border-line bg-panel p-0 text-fg shadow-pop"
     >
       <div className="flex items-center gap-2 border-b border-line px-3">
@@ -123,7 +134,10 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
         <input
           ref={inputRef}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setIndex(0);
+          }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
               e.preventDefault();
@@ -230,8 +244,6 @@ function ShellInner({ children }: { children: ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
   const chord = useRef<number>(0);
 
-  useEffect(() => setNavOpen(false), [pathname]);
-
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -300,6 +312,7 @@ function ShellInner({ children }: { children: ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setNavOpen(false)}
               aria-current={active ? "page" : undefined}
               className={cx(
                 "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors",
