@@ -230,11 +230,21 @@ export class RunController {
   decide(decision: ApprovalDecision): number {
     let applied = 0;
     for (const group of [...this.approvals]) {
-      for (const id of decision.approve) if (group.callIds.includes(id)) group.decided.set(id, true);
-      for (const id of decision.reject) if (group.callIds.includes(id)) group.decided.set(id, false);
+      for (const id of decision.approve) {
+        if (group.callIds.includes(id)) {
+          group.decided.set(id, true);
+          applied++;
+        }
+      }
+      for (const id of decision.reject) {
+        if (group.callIds.includes(id)) {
+          group.decided.set(id, false);
+          applied++;
+        }
+      }
+      // Calls requested together are answered together: wait until each has a decision.
       if (group.callIds.every((id) => group.decided.has(id))) {
         this.approvals = this.approvals.filter((g) => g !== group);
-        applied += group.callIds.length;
         group.resolve({
           approve: group.callIds.filter((id) => group.decided.get(id) === true),
           reject: group.callIds.filter((id) => group.decided.get(id) === false),

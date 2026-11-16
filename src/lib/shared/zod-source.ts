@@ -54,6 +54,11 @@ function literal(node: AnyNode): unknown {
       return (node.elements as (AnyNode | null)[]).map((el) => (el ? value(el) : fail("Array holes are not allowed", node)));
     case "ObjectExpression":
       return objectOf(node, value);
+    case "ArrowFunctionExpression":
+    case "FunctionExpression":
+      return fail("Functions are not allowed in a schema, so .refine() and .transform() cannot be used", node);
+    case "Identifier":
+      return fail(`Unknown identifier "${node.name}". Only literals and z.… expressions are allowed`, node);
     default:
       return fail(`Unsupported expression "${node.type}"`, node);
   }

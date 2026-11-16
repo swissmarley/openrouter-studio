@@ -70,6 +70,7 @@ function inline(text: string): ReactNode[] {
 }
 
 type Block =
+  | { kind: "table"; header: string[]; rows: string[][] }
   | { kind: "code"; lang: string; code: string }
   | { kind: "heading"; level: number; text: string }
   | { kind: "list"; ordered: boolean; items: string[] }
@@ -94,6 +95,16 @@ function parse(src: string): Block[] {
     }
     if (line.trim() === "") {
       i++;
+      continue;
+    }
+    // A table is a pipe row followed by a |---|---| separator row.
+    if (line.includes("|") && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1])) {
+      const cells = (row: string) => row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const header = cells(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim() !== "") rows.push(cells(lines[i++]));
+      blocks.push({ kind: "table", header, rows });
       continue;
     }
     const heading = line.match(/^(#{1,6})\s+(.*)$/);
@@ -132,6 +143,29 @@ export function Markdown({ text }: { text: string }) {
     <div className="space-y-2 text-[13px] leading-relaxed break-words">
       {parse(text).map((b, i) => {
         switch (b.kind) {
+          case "table":
+            return (
+              <div key={i} className="overflow-x-auto rounded-md border border-line">
+                <table className="tabular w-full text-left text-xs">
+                  <thead className="bg-subtle text-muted">
+                    <tr>
+                      {b.header.map((h, j) => (
+                        <th key={j} className="px-2.5 py-1.5 font-medium">{inline(h)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {b.rows.map((row, j) => (
+                      <tr key={j} className="border-t border-line">
+                        {b.header.map((_, k) => (
+                          <td key={k} className="px-2.5 py-1.5 align-top">{inline(row[k] ?? "")}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
           case "code":
             return <CodeBlock key={i} code={b.code} lang={b.lang} />;
           case "heading":
