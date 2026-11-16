@@ -190,6 +190,8 @@ function AgentEditor({
   return (
     <form
       className="flex min-h-0 flex-1 flex-col"
+      // Values are validated on the server; native step/min checks would block valid amounts such as 0.25.
+      noValidate
       onSubmit={(e) => {
         e.preventDefault();
         void save();

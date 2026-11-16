@@ -50,11 +50,16 @@ export interface Resource<T> {
 }
 
 /** Fetch-on-mount with reload. Pass `null` to skip (e.g. while a dependency is unknown). */
-export function useResource<T>(url: string | null, opts: { pollMs?: number } = {}): Resource<T> {
+export function useResource<T>(url: string | null, opts: { pollMs?: number; pollWhile?: (data: T) => boolean } = {}): Resource<T> {
   // The result is stored with the URL it answers, so "loading" is simply "no answer for
   // the current URL yet" and never has to be toggled by hand.
   const [result, setResult] = useState<{ url: string; data: T | null; error: ApiClientError | null } | null>(null);
   const latest = useRef(0);
+  // Read by the poll timer, so polling can stop once the data says there is nothing left to wait for.
+  const poll = useRef({ data: null as T | null, pollWhile: opts.pollWhile });
+  useEffect(() => {
+    poll.current = { data: result && result.url === url ? result.data : null, pollWhile: opts.pollWhile };
+  });
 
   const load = useCallback((): Promise<void> => {
     if (url === null) return Promise.resolve();
@@ -77,7 +82,11 @@ export function useResource<T>(url: string | null, opts: { pollMs?: number } = {
     if (url === null) return;
     void load();
     if (!opts.pollMs) return;
-    const timer = setInterval(() => void load(), opts.pollMs);
+    const timer = setInterval(() => {
+      const { data, pollWhile } = poll.current;
+      if (pollWhile && data !== null && !pollWhile(data)) return;
+      void load();
+    }, opts.pollMs);
     return () => clearInterval(timer);
   }, [url, load, opts.pollMs]);
 

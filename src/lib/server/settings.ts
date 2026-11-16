@@ -1,6 +1,7 @@
 import "server-only";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { usd } from "@/lib/shared/format";
 import { defaultSettings, settingsSchema, type Settings } from "@/lib/shared/settings";
 import { ApiError } from "./api";
 
@@ -79,7 +80,7 @@ export function assertWithinBudget(accountId: string): void {
   throw new ApiError(
     402,
     "budget_exceeded",
-    `Your ${hit.period} budget of $${hit.limitUsd.toFixed(2)} is spent ($${hit.spentUsd.toFixed(4)} used). Raise it in Settings to continue.`,
+    `Your ${hit.period} budget of ${usd(hit.limitUsd)} is spent (${usd(hit.spentUsd)} used). Raise it in Settings to continue.`,
     hit,
   );
 }

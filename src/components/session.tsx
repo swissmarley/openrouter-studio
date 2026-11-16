@@ -152,8 +152,9 @@ export function ConnectKey({ compact }: { compact?: boolean }) {
 }
 
 /** Renders children only once a key is connected; otherwise shows the connect form. */
-export function RequireKey({ children }: { children: ReactNode }) {
+export function RequireKey({ children, fallback }: { children: ReactNode; fallback?: ReactNode }) {
   const session = useSession();
+  if (fallback !== undefined && (session.loading || !session.connected)) return <>{fallback}</>;
   if (session.loading) {
     return (
       <div className="flex flex-1 items-center justify-center p-10">

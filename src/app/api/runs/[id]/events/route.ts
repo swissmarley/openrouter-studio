@@ -1,3 +1,5 @@
+import { unstable_rethrow } from "next/navigation";
+import { connection } from "next/server";
 import { z } from "zod";
 import { errorResponse, parseQuery } from "@/lib/server/api";
 import { getController, getRunRow, listEvents } from "@/lib/server/agents/runner";
@@ -17,10 +19,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   let runId: string;
   let after: number;
   try {
+    await connection();
     const account = await requireAccount();
     runId = getRunRow(account.id, (await ctx.params).id).id;
     after = parseQuery(req, querySchema).after;
   } catch (err) {
+    unstable_rethrow(err);
     return errorResponse(err);
   }
 

@@ -1,4 +1,6 @@
 import "server-only";
+import { unstable_rethrow } from "next/navigation";
+import { connection } from "next/server";
 import { z } from "zod";
 
 /** An error with an HTTP status that is safe to show to the client. */
@@ -57,10 +59,15 @@ type Handler<C> = (req: Request, ctx: C) => Promise<Response | unknown>;
 export function route<C = unknown>(handler: Handler<C>) {
   return async (req: Request, ctx: C): Promise<Response> => {
     try {
+      // Every API route is per-request: never prerendered at build time, never cached.
+      await connection();
       assertSameOrigin(req);
       const result = await handler(req, ctx);
       return result instanceof Response ? result : json(result ?? { ok: true });
     } catch (err) {
+      // Next.js signals "this needs a real request" (e.g. cookies() during build-time
+      // prerendering) by throwing; that must reach the framework, not become a 500.
+      unstable_rethrow(err);
       return errorResponse(err);
     }
   };

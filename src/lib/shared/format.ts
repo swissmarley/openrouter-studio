@@ -1,5 +1,11 @@
 /** Display helpers shared by every screen. */
 
+/** Two significant digits as a plain decimal: 0.00000066, never 6.6e-7. */
+function small(value: number): string {
+  const decimals = Math.min(12, 1 - Math.floor(Math.log10(Math.abs(value))));
+  return value.toFixed(Math.max(2, decimals));
+}
+
 /** Per-token USD price shown per million tokens, the unit people actually compare. */
 export function pricePerM(perToken: number | null | undefined): string {
   if (perToken === null || perToken === undefined) return "—";
@@ -9,7 +15,7 @@ export function pricePerM(perToken: number | null | undefined): string {
   if (v >= 100) return `$${v.toFixed(0)}`;
   if (v >= 1) return `$${v.toFixed(2)}`;
   if (v >= 0.01) return `$${v.toFixed(3)}`;
-  return `$${v.toPrecision(2)}`;
+  return `$${small(v)}`;
 }
 
 /** A dollar amount that stays readable from fractions of a cent up. */
@@ -20,7 +26,7 @@ export function usd(amount: number | null | undefined): string {
   if (abs >= 100) return `$${amount.toFixed(0)}`;
   if (abs >= 1) return `$${amount.toFixed(2)}`;
   if (abs >= 0.01) return `$${amount.toFixed(4)}`;
-  return `$${amount.toPrecision(2)}`;
+  return `${amount < 0 ? "-" : ""}$${small(abs)}`;
 }
 
 export function tokens(n: number | null | undefined): string {

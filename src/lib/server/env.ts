@@ -13,7 +13,8 @@ function int(v: string | undefined, fallback: number) {
 
 export const env = {
   /** Where the SQLite file, generated secret and agent workspaces live. */
-  dataDir: path.resolve(process.env.DATA_DIR || "./data"),
+  // The ignore comment stops Turbopack from tracing the whole project for this runtime path.
+  dataDir: path.resolve(/* turbopackIgnore: true */ process.env.DATA_DIR || "./data"),
   appSecret: process.env.APP_SECRET || "",
   /** Public origin of this app, used for attribution headers and the OAuth callback. */
   appUrl: (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, ""),

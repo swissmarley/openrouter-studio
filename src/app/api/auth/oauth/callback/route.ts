@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { connection } from "next/server";
 import { getDb, schema } from "@/db";
 import { decrypt } from "@/lib/server/crypto";
 import { env } from "@/lib/server/env";
@@ -13,6 +14,7 @@ function back(error?: string) {
 
 /** OAuth PKCE, step 2: exchange the code (plus our verifier) for a user-controlled key. */
 export async function GET(req: Request) {
+  await connection();
   const params = new URL(req.url).searchParams;
   const code = params.get("code");
   const state = params.get("state");

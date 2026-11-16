@@ -473,7 +473,12 @@ function LogTab() {
           </thead>
           <tbody>
             {calls.map((c) => (
-              <tr key={c.id} tabIndex={0} onClick={() => setOpen(c)} onKeyDown={(e) => e.key === "Enter" && setOpen(c)} className="cursor-pointer border-t border-line outline-offset-[-2px] hover:bg-subtle">
+              <tr key={c.id} tabIndex={0} onClick={() => setOpen(c)} onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    setOpen(c);
+                  }
+                }} className="cursor-pointer border-t border-line outline-offset-[-2px] hover:bg-subtle">
                 <td className="tabular px-2.5 py-1.5 whitespace-nowrap text-muted">{dateTime(c.ts)}</td>
                 <td className="px-2.5 py-1.5 font-mono font-medium">{c.toolName}</td>
                 <td className="px-2.5 py-1.5 text-muted">{c.source}</td>
